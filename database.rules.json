@@ -1,0 +1,50 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "public": {
+      "dojos": { ".read": "auth != null" }
+    },
+    "profiles": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "instructorApplications": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "dojos": {
+      "$dojoId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || (!data.exists() && newData.child('ownerUid').val() === auth.uid) || (data.child('ownerUid').val() === auth.uid && newData.child('ownerUid').val() === auth.uid))"
+      }
+    },
+    "athletes": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$athleteId": {
+        ".read": "auth != null && (data.child('instructorUid').val() === auth.uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || (!data.exists() && newData.child('instructorUid').val() === auth.uid) || (data.child('instructorUid').val() === auth.uid && newData.child('instructorUid').val() === auth.uid))"
+      }
+    },
+    "registrations": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).val() === true",
+      "$registrationId": {
+        ".read": "auth != null && (data.child('instructorUid').val() === auth.uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (root.child('admins').child(auth.uid).val() === true || (!data.exists() && newData.child('instructorUid').val() === auth.uid) || (data.child('instructorUid').val() === auth.uid && newData.child('instructorUid').val() === auth.uid))"
+      }
+    },
+    "paymentReceipts": {
+      "$receiptId": {
+        ".read": "auth != null && (data.child('instructorUid').val() === auth.uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && data.child('instructorUid').val() === auth.uid"
+      }
+    },
+    "admins": {
+      "$uid": { ".read": "auth != null && auth.uid === $uid", ".write": false }
+    }
+  }
+}

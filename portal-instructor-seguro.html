@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Portal del Instructor · Senshi Bolivia</title>
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    body{padding:24px;background:#f2f5fa}.shell{max-width:760px;margin:auto}.box{background:#fff;border:1px solid #dce3ef;border-radius:12px;padding:24px;margin:16px 0}.hide{display:none}.error{color:#991f1f}.ok{color:#187a3e}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.head{background:#0b1d3a;color:#fff;border-radius:12px;padding:22px}.head h1{margin:0;font-size:24px}.muted{color:#63758d;font-size:13px}.athlete{padding:12px 0;border-bottom:1px solid #e4e8ef}.qr{max-width:220px;width:100%;border:1px dashed #b8952a;border-radius:8px;padding:10px}
+  </style>
+</head>
+<body><main class="shell">
+  <section class="head"><h1>架真 Portal del Instructor</h1><p>Registro seguro de atletas · Senshi Bolivia</p></section>
+  <section id="setup" class="box"><b>Configuración pendiente</b><p>Completa <code>firebase/secure-config.js</code> con tu proyecto Firebase antes de usar este portal.</p></section>
+  <section id="auth" class="box hide">
+    <h2>Acceso de instructores</h2><p class="muted">El CI es un dato de perfil, no una contraseña.</p>
+    <div class="row"><input id="email" type="email" placeholder="Correo electrónico"><input id="password" type="password" placeholder="Contraseña (mín. 6 caracteres)"></div>
+    <p id="authMsg" class="error"></p><button class="btn bgold" id="login">Ingresar</button> <button class="btn bgh" id="signup">Crear cuenta de instructor</button>
+  </section>
+  <section id="app" class="hide">
+    <div class="box"><button class="btn bred" id="logout">Salir</button><h2 id="welcome">Mi dojo</h2><p class="muted">Tu sesión se mantiene; no necesitas registrar de nuevo a tus atletas.</p></div>
+    <form id="dojoForm" class="box"><h2>Mi perfil y dojo</h2><div class="row"><input id="name" required placeholder="Nombre completo del instructor"><input id="ci" required placeholder="C.I. (editable)"><input id="dojo" required placeholder="Nombre del dojo"><input id="phone" placeholder="Teléfono"></div><p class="muted">La mesa técnica debe aprobar el dojo antes de publicar sus inscripciones.</p><button class="btn bgold">Guardar perfil</button><span id="profileMsg"></span></form>
+    <form id="athleteForm" class="box"><h2>Registrar atleta</h2><div class="row"><input id="athleteName" required placeholder="Nombre completo"><input id="birthDate" required type="date"><input id="weight" required type="number" min="10" step="0.1" placeholder="Peso (kg)"><select id="gender"><option>Masculino</option><option>Femenino</option></select></div><p><label><input id="guardianConsent" required type="checkbox"> Confirmo que, si el atleta es menor, cuento con autorización previa de su padre, madre o tutor.</label></p><button class="btn bgold">Guardar e inscribir atleta</button><span id="athleteMsg"></span></form>
+    <section class="box"><h2>Pago por QR</h2><p>Sin pasarela de pago. Reemplaza el archivo <code>assets/qr-pago.png</code> por el QR oficial de la cuenta organizadora.</p><img class="qr" src="assets/qr-pago.png" alt="QR de pago"><p>Banco Fortaleza · Cuenta 3051307176</p></section>
+    <section class="box"><h2>Atletas registrados</h2><div id="athletes"><p class="muted">Cargando…</p></div></section>
+  </section>
+</main>
+<script type="module">
+import { firebaseConfig } from './firebase/secure-config.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getDatabase, ref, set, push, onValue, query, orderByChild, equalTo } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+const configured = firebaseConfig.apiKey !== 'REEMPLAZAR';
+const $ = id => document.getElementById(id);
+if (!configured) { $('setup').classList.remove('hide'); } else {
+  $('setup').classList.add('hide'); $('auth').classList.remove('hide');
+  const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getDatabase(app);
+  const message=(id,text,kind='ok')=>{const e=$(id);e.className=kind;e.textContent=text};
+  $('login').onclick=async()=>{try{await signInWithEmailAndPassword(auth,$('email').value,$('password').value)}catch(e){message('authMsg',e.message,'error')}};
+  $('signup').onclick=async()=>{try{await createUserWithEmailAndPassword(auth,$('email').value,$('password').value)}catch(e){message('authMsg',e.message,'error')}};
+  $('logout').onclick=()=>signOut(auth);
+  onAuthStateChanged(auth,user=>{
+    $('auth').classList.toggle('hide',!!user); $('app').classList.toggle('hide',!user); if(!user)return;
+    const profile=ref(db,'profiles/'+user.uid); onValue(profile,s=>{const p=s.val()||{};['name','ci','dojo','phone'].forEach(k=>$(k).value=p[k]||'');$('welcome').textContent=p.dojo||'Completa los datos de tu dojo'});
+    onValue(query(ref(db,'athletes'),orderByChild('instructorUid'),equalTo(user.uid)),s=>{const values=Object.values(s.val()||{});$('athletes').innerHTML=values.length?values.map(a=>`<div class="athlete"><b>${a.name}</b><br><span class="muted">${a.status||'Pendiente'} · ${a.createdAt}</span></div>`).join(''):'<p class="muted">Aún no registraste atletas.</p>'});
+    $('dojoForm').onsubmit=async e=>{e.preventDefault();const p={name:$('name').value.trim(),ci:$('ci').value.trim(),dojo:$('dojo').value.trim(),phone:$('phone').value.trim(),role:'instructor',updatedAt:new Date().toISOString()};await set(profile,p);await set(ref(db,'instructorApplications/'+user.uid),{...p,uid:user.uid,status:'pending'});message('profileMsg','Perfil guardado. Pendiente de aprobación de mesa técnica.')};
+    $('athleteForm').onsubmit=async e=>{e.preventDefault();const age=Math.floor((Date.now()-new Date($('birthDate').value))/31557600000);const athlete={name:$('athleteName').value.trim(),birthDate:$('birthDate').value,weight:Number($('weight').value),gender:$('gender').value,instructorUid:user.uid,guardianConsent:true,status:'pending',createdAt:new Date().toISOString()};if(age<18&&!$('guardianConsent').checked)return;const key=push(ref(db,'athletes')).key;await set(ref(db,'athletes/'+key),athlete);await set(ref(db,'registrations/'+key),{athleteId:key,instructorUid:user.uid,status:'pending',createdAt:athlete.createdAt});e.target.reset();message('athleteMsg','Atleta guardado e inscripción enviada.')};
+  });
+}
+</script></body></html>
